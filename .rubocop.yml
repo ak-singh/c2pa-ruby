@@ -1,0 +1,45 @@
+require:
+  - rubocop-rspec
+  - rubocop-performance
+
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.1
+  Exclude:
+    - "vendor/**/*"
+    - "tmp/**/*"
+
+# Documentation is enforced for public-facing modules and classes only.
+Style/Documentation:
+  Exclude:
+    - "spec/**/*"
+
+# Gem files are allowed longer blocks.
+Metrics/BlockLength:
+  Exclude:
+    - "*.gemspec"
+    - "spec/**/*"
+    - "Rakefile"
+
+Metrics/MethodLength:
+  Max: 20
+
+# FFI modules need large layout/attach_function blocks.
+Metrics/ClassLength:
+  Exclude:
+    - "lib/c2pa/ffi.rb"
+
+# RSpec: allow larger example groups for integration tests
+RSpec/ExampleLength:
+  Max: 20
+
+RSpec/MultipleExpectations:
+  Max: 4
+
+# Allow `described_class` to be the top-level subject
+RSpec/DescribedClass:
+  EnforcedStyle: described_class
+
+# Nested describes for sub-modules (Loader, API) require 4 levels.
+RSpec/NestedGroups:
+  Max: 4

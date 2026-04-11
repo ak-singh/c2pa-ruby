@@ -72,10 +72,15 @@ RSpec.describe C2pa do
     end
 
     describe '.last_error' do
-      it 'returns nil after a successful call' do
-        C2pa.version
-        # The C library clears its thread-local error slot after every successful call.
-        expect(described_class.last_error).to be_nil
+      it 'returns a String when an error is present' do
+        # Trigger a known error by attempting to read a file with no manifest.
+        begin
+          C2pa::Reader.open('image/jpeg',
+                            File.open(File.join(__dir__, 'fixtures', 'earth_apollo17.jpg'), 'rb'))
+        rescue C2pa::Error
+          # expected — the library now has an error in its thread-local slot
+        end
+        expect(described_class.last_error).to be_a(String)
       end
     end
   end

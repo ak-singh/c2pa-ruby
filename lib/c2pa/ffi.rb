@@ -22,7 +22,19 @@ module C2pa
     # mirroring the Python SDK's _validate_library_exports pattern. Running before
     # attach_function means we control the error message — otherwise FFI raises its own
     # FFI::NotFoundError with no context about version compatibility.
-    REQUIRED_FUNCTIONS = %w[c2pa_version c2pa_error c2pa_string_free].freeze
+    REQUIRED_FUNCTIONS = %w[
+      c2pa_version
+      c2pa_error
+      c2pa_string_free
+      c2pa_create_stream
+      c2pa_release_stream
+      c2pa_reader_from_stream
+      c2pa_reader_json
+      c2pa_reader_detailed_json
+      c2pa_reader_is_embedded
+      c2pa_reader_remote_url
+      c2pa_reader_free
+    ].freeze
 
     missing = REQUIRED_FUNCTIONS.reject { |fn| ffi_libraries.first.find_function(fn) }
     unless missing.empty?
@@ -34,6 +46,24 @@ module C2pa
     attach_function :c2pa_version, [], :pointer
     attach_function :c2pa_error, [], :pointer
     attach_function :c2pa_string_free, [:pointer], :void
+
+    # Stream callbacks — stored as instance variables in Stream to prevent GC
+    callback :read_callback,  %i[pointer pointer ssize_t], :ssize_t
+    callback :seek_callback,  %i[pointer ssize_t int],     :ssize_t
+    callback :write_callback, %i[pointer pointer ssize_t], :ssize_t
+    callback :flush_callback, [:pointer],                  :ssize_t
+
+    attach_function :c2pa_create_stream,
+                    %i[pointer read_callback seek_callback write_callback flush_callback],
+                    :pointer
+    attach_function :c2pa_release_stream, [:pointer], :void
+
+    attach_function :c2pa_reader_from_stream,   %i[string pointer], :pointer
+    attach_function :c2pa_reader_json,          [:pointer],          :pointer
+    attach_function :c2pa_reader_detailed_json, [:pointer],          :pointer
+    attach_function :c2pa_reader_is_embedded,   [:pointer],          :int
+    attach_function :c2pa_reader_remote_url,    [:pointer],          :pointer
+    attach_function :c2pa_reader_free,          [:pointer],          :void
 
     def self.last_error
       ptr = c2pa_error

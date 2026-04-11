@@ -43,3 +43,7 @@ RSpec/DescribedClass:
 # Nested describes for sub-modules (Loader, API) require 4 levels.
 RSpec/NestedGroups:
   Max: 4
+
+# Flat spec directory — all specs live directly under spec/, not mirroring lib/.
+RSpec/SpecFilePathFormat:
+  Enabled: false

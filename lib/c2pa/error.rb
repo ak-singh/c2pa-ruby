@@ -10,4 +10,11 @@ module C2pa
 
   # Raised when the native library cannot be found or fails to load.
   class LibraryNotFoundError < Error; end
+
+  # Raised when an operation is attempted on a closed Reader or Builder.
+  class ClosedError < Error
+    def initialize(klass)
+      super("#{klass} is already closed")
+    end
+  end
 end

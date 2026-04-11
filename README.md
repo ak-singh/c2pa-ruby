@@ -64,6 +64,10 @@ C2pa::Reader.open("image/jpeg", File.open("photo.jpg", "rb")) do |reader|
 end
 ```
 
+For assets with remote manifests, the library fetches the manifest over the network
+automatically during `Reader.open`. If the network is unavailable, `Reader.open` raises
+`C2pa::Error`.
+
 ### Read from any IO object
 
 The reader works with any seekable IO — a file, a `StringIO`, a cloud storage stream, etc.:

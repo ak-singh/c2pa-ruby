@@ -13,3 +13,6 @@ Gemfile.lock
 
 # RubyGems
 *.gem
+
+# Local notes — not for publication
+/docs/

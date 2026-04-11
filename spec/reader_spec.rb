@@ -117,6 +117,13 @@ RSpec.describe C2pa::Reader do
       reader.close
       expect { reader.remote_url }.to raise_error(C2pa::ClosedError)
     end
+
+    # TODO: the non-nil path is untested. The Rust SDK auto-fetches the remote
+    #       manifest inside c2pa_reader_from_stream — Reader.open fails with no
+    #       internet and succeeds with internet. A fixture file alone is not
+    #       enough; this requires a live network call (integration test).
+    #       Tag as :integration and exclude from the default suite when implemented.
+    it 'returns a String when the manifest is remote'
   end
 
   describe '#close' do

@@ -5,6 +5,7 @@ require_relative 'c2pa/error'
 require_relative 'c2pa/loader'
 require_relative 'c2pa/ffi'
 require_relative 'c2pa/reader'
+require_relative 'c2pa/builder'
 
 # Ruby bindings for the C2PA reference SDK (c2pa-rs) via the precompiled
 # c2pa-c FFI layer. Ships with native binaries — no Rust toolchain required.

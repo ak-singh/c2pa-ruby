@@ -1,12 +1,9 @@
 # frozen_string_literal: true
 
 module C2pa
-  # Internal bridge between a Ruby IO object and the C2paStream struct.
-  #
-  # The C library holds raw function pointers for the duration of a read or
-  # sign operation. Ruby's GC must not move or collect those closures while
-  # C holds them. Storing each callback as an instance variable on this object
-  # pins it for the lifetime of the Stream instance.
+  # Bridges a Ruby IO object to the C2paStream callback interface.
+  # Callbacks are stored as instance variables to prevent GC collection
+  # while the C library holds function pointers to them.
   #
   # @api private
   class Stream
@@ -75,25 +72,17 @@ module C2pa
     end
   end
 
-  # High-level Ruby wrapper around the C2PA Reader API.
+  # Reads C2PA manifests from any IO-like object (File, StringIO, etc.).
+  # Not thread-safe — do not share across threads.
   #
-  # Reads C2PA manifests from any IO-like object (File, StringIO, etc.)
-  # without materialising the entire file into a Ruby string.
-  #
-  # @example Block form (recommended)
+  # @example
   #   C2pa::Reader.open('image/jpeg', File.open('photo.jpg', 'rb')) do |r|
   #     puts r.json
   #   end
-  #
-  # @example Manual lifecycle
-  #   reader = C2pa::Reader.open('image/jpeg', io)
-  #   puts reader.json
-  #   reader.close
   class Reader
-    # @param mime_type [String] MIME type of the asset, e.g. "image/jpeg"
-    # @param io       [IO]     readable, seekable IO object
+    # @param mime_type [String] e.g. "image/jpeg"
+    # @param io        [IO]    readable, seekable
     # @yieldparam reader [C2pa::Reader]
-    # @return [C2pa::Reader, Object] reader instance, or block return value
     def self.open(mime_type, io)
       reader = new(mime_type, io)
       return reader unless block_given?
@@ -107,7 +96,7 @@ module C2pa
 
     def initialize(mime_type, io)
       @closed = false
-      @ptr    = FFI::Pointer::NULL # safe sentinel so close is always callable
+      @ptr    = FFI::Pointer::NULL
       @stream = Stream.new(io)
       @ptr    = API.c2pa_reader_from_stream(mime_type, @stream.ptr)
 
@@ -119,8 +108,7 @@ module C2pa
       raise C2pa::Error, "c2pa_reader_from_stream failed: #{error_msg}"
     end
 
-    # Returns the manifest store as a JSON string.
-    # @return [String]
+    # @return [String] manifest store as JSON
     def json
       check_open!
       ptr = API.c2pa_reader_json(@ptr)
@@ -129,8 +117,7 @@ module C2pa
       API.read_and_free_string(ptr)
     end
 
-    # Returns the detailed manifest store as a JSON string (includes ingredient details).
-    # @return [String]
+    # @return [String] manifest store as JSON, including ingredient details
     def detailed_json
       check_open!
       ptr = API.c2pa_reader_detailed_json(@ptr)
@@ -139,15 +126,12 @@ module C2pa
       API.read_and_free_string(ptr)
     end
 
-    # Returns true if the manifest is embedded in the asset.
-    # @return [Boolean]
     def embedded?
       check_open!
       API.c2pa_reader_is_embedded(@ptr) != 0
     end
 
-    # Returns the remote URL of the manifest, or nil if there is none.
-    # @return [String, nil]
+    # @return [String, nil] remote manifest URL, or nil if embedded
     def remote_url
       check_open!
       ptr = API.c2pa_reader_remote_url(@ptr)
@@ -156,7 +140,7 @@ module C2pa
       API.read_and_free_string(ptr)
     end
 
-    # Release native resources. Idempotent — safe to call more than once.
+    # Idempotent — safe to call more than once.
     def close
       return if @closed
 
@@ -165,7 +149,6 @@ module C2pa
       @stream&.close
     end
 
-    # @return [Boolean]
     def closed?
       @closed
     end

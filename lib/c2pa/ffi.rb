@@ -34,6 +34,13 @@ module C2pa
       c2pa_reader_is_embedded
       c2pa_reader_remote_url
       c2pa_reader_free
+      c2pa_signer_from_info
+      c2pa_signer_free
+      c2pa_builder_from_json
+      c2pa_builder_add_action
+      c2pa_builder_sign
+      c2pa_builder_free
+      c2pa_manifest_bytes_free
     ].freeze
 
     missing = REQUIRED_FUNCTIONS.reject { |fn| ffi_libraries.first.find_function(fn) }
@@ -59,11 +66,22 @@ module C2pa
     attach_function :c2pa_release_stream, [:pointer], :void
 
     attach_function :c2pa_reader_from_stream,   %i[string pointer], :pointer
-    attach_function :c2pa_reader_json,          [:pointer],          :pointer
-    attach_function :c2pa_reader_detailed_json, [:pointer],          :pointer
-    attach_function :c2pa_reader_is_embedded,   [:pointer],          :int
-    attach_function :c2pa_reader_remote_url,    [:pointer],          :pointer
-    attach_function :c2pa_reader_free,          [:pointer],          :void
+    attach_function :c2pa_reader_json,          [:pointer],         :pointer
+    attach_function :c2pa_reader_detailed_json, [:pointer],         :pointer
+    attach_function :c2pa_reader_is_embedded,   [:pointer],         :int
+    attach_function :c2pa_reader_remote_url,    [:pointer],         :pointer
+    attach_function :c2pa_reader_free,          [:pointer],         :void
+
+    # Signer — wraps a cert + private key + algorithm into an opaque signer handle
+    attach_function :c2pa_signer_from_info, [:pointer], :pointer
+    attach_function :c2pa_signer_free,      [:pointer], :void
+
+    # Builder — creates and signs manifests
+    attach_function :c2pa_builder_from_json, [:string], :pointer
+    attach_function :c2pa_builder_add_action,  %i[pointer string], :int
+    attach_function :c2pa_builder_sign,        %i[pointer string pointer pointer pointer pointer], :int64
+    attach_function :c2pa_builder_free,        [:pointer],                             :void
+    attach_function :c2pa_manifest_bytes_free, [:pointer],                             :void
 
     def self.last_error
       ptr = c2pa_error

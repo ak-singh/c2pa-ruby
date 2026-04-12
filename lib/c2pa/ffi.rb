@@ -38,6 +38,7 @@ module C2pa
       c2pa_signer_free
       c2pa_builder_from_json
       c2pa_builder_add_action
+      c2pa_builder_add_ingredient_from_stream
       c2pa_builder_sign
       c2pa_builder_free
       c2pa_manifest_bytes_free
@@ -77,11 +78,12 @@ module C2pa
     attach_function :c2pa_signer_free,      [:pointer], :void
 
     # Builder — creates and signs manifests
-    attach_function :c2pa_builder_from_json, [:string], :pointer
-    attach_function :c2pa_builder_add_action,  %i[pointer string], :int
-    attach_function :c2pa_builder_sign,        %i[pointer string pointer pointer pointer pointer], :int64
-    attach_function :c2pa_builder_free,        [:pointer],                             :void
-    attach_function :c2pa_manifest_bytes_free, [:pointer],                             :void
+    attach_function :c2pa_builder_from_json,              [:string],                              :pointer
+    attach_function :c2pa_builder_add_action,             %i[pointer string],                     :int
+    attach_function :c2pa_builder_add_ingredient_from_stream, %i[pointer string string pointer],  :int
+    attach_function :c2pa_builder_sign,                   %i[pointer string pointer pointer pointer pointer], :int64
+    attach_function :c2pa_builder_free,                   [:pointer],                             :void
+    attach_function :c2pa_manifest_bytes_free,            [:pointer],                             :void
 
     def self.last_error
       ptr = c2pa_error

@@ -13,6 +13,11 @@ RSpec.describe C2pa::Builder do
     { 'claim_generator' => 'c2pa-ruby-test/0.1.0', 'assertions' => [] }
   end
 
+  # Opens source fixture and ensures the file is closed after the block.
+  def with_source(&block)
+    File.open(source, 'rb', &block)
+  end
+
   describe '.new' do
     it 'accepts a JSON string' do
       b = described_class.new(JSON.generate(manifest_json))
@@ -65,6 +70,76 @@ RSpec.describe C2pa::Builder do
     end
   end
 
+  describe '#add_ingredient' do
+    it 'accepts a Hash ingredient definition' do
+      b = described_class.new(manifest_json)
+      with_source { |f| expect { b.add_ingredient({ 'title' => 'source.jpg' }, 'image/jpeg', f) }.not_to raise_error }
+      b.close
+    end
+
+    it 'accepts a JSON string ingredient definition' do
+      b = described_class.new(manifest_json)
+      with_source { |f| expect { b.add_ingredient('{"title":"source.jpg"}', 'image/jpeg', f) }.not_to raise_error }
+      b.close
+    end
+
+    it 'embeds the ingredient in the signed manifest' do
+      b      = described_class.new(manifest_json)
+      signer = C2pa::Signer.from_info(alg: 'es256', cert: cert, key: key)
+      dst    = StringIO.new(''.b)
+
+      with_source { |f| b.add_ingredient({ 'title' => 'source.jpg' }, 'image/jpeg', f) }
+      with_source { |f| b.sign(signer, 'image/jpeg', f, dst) }
+      signer.close
+      b.close
+
+      dst.rewind
+      C2pa::Reader.open('image/jpeg', dst) do |r|
+        data        = JSON.parse(r.json)
+        active      = data['active_manifest']
+        ingredients = data['manifests'][active]['ingredients']
+        expect(ingredients).not_to be_nil
+        expect(ingredients).not_to be_empty
+      end
+    end
+
+    it 'accumulates multiple ingredients' do
+      b      = described_class.new(manifest_json)
+      signer = C2pa::Signer.from_info(alg: 'es256', cert: cert, key: key)
+      dst    = StringIO.new(''.b)
+
+      with_source { |f| b.add_ingredient({ 'title' => 'first.jpg' }, 'image/jpeg', f) }
+      with_source { |f| b.add_ingredient({ 'title' => 'second.jpg' }, 'image/jpeg', f) }
+      with_source { |f| b.sign(signer, 'image/jpeg', f, dst) }
+      signer.close
+      b.close
+
+      dst.rewind
+      C2pa::Reader.open('image/jpeg', dst) do |r|
+        data        = JSON.parse(r.json)
+        active      = data['active_manifest']
+        ingredients = data['manifests'][active]['ingredients']
+        expect(ingredients.length).to be >= 2
+      end
+    end
+
+    it 'raises C2pa::Error for invalid ingredient JSON' do
+      b = described_class.new(manifest_json)
+      with_source do |f|
+        expect { b.add_ingredient('{ not valid json }', 'image/jpeg', f) }.to raise_error(C2pa::Error)
+      end
+      b.close
+    end
+
+    it 'raises ClosedError after close' do
+      b = described_class.new(manifest_json)
+      b.close
+      with_source do |f|
+        expect { b.add_ingredient({}, 'image/jpeg', f) }.to raise_error(C2pa::ClosedError)
+      end
+    end
+  end
+
   describe '#sign' do
     let(:signer) { C2pa::Signer.from_info(alg: 'es256', cert: cert, key: key) }
 
@@ -73,7 +148,7 @@ RSpec.describe C2pa::Builder do
     it 'writes a non-empty signed asset to dest_io' do
       b   = described_class.new(manifest_json)
       dst = StringIO.new(''.b)
-      b.sign(signer, 'image/jpeg', File.open(source, 'rb'), dst)
+      with_source { |f| b.sign(signer, 'image/jpeg', f, dst) }
       expect(dst.string.bytesize).to be > 0
       b.close
     end
@@ -81,7 +156,8 @@ RSpec.describe C2pa::Builder do
     it 'returns the raw manifest bytes' do
       b     = described_class.new(manifest_json)
       dst   = StringIO.new(''.b)
-      bytes = b.sign(signer, 'image/jpeg', File.open(source, 'rb'), dst)
+      bytes = nil
+      with_source { |f| bytes = b.sign(signer, 'image/jpeg', f, dst) }
       expect(bytes).to be_a(String)
       expect(bytes.bytesize).to be > 0
       b.close
@@ -90,7 +166,7 @@ RSpec.describe C2pa::Builder do
     it 'produces a readable manifest — round-trip via Reader' do
       b   = described_class.new(manifest_json)
       dst = StringIO.new(''.b)
-      b.sign(signer, 'image/jpeg', File.open(source, 'rb'), dst)
+      with_source { |f| b.sign(signer, 'image/jpeg', f, dst) }
       b.close
 
       dst.rewind
@@ -104,13 +180,14 @@ RSpec.describe C2pa::Builder do
       b = described_class.new(manifest_json)
       b.add_action('c2pa.published')
       dst = StringIO.new(''.b)
-      b.sign(signer, 'image/jpeg', File.open(source, 'rb'), dst)
+      with_source { |f| b.sign(signer, 'image/jpeg', f, dst) }
       b.close
 
       dst.rewind
       C2pa::Reader.open('image/jpeg', dst) do |r|
         data          = JSON.parse(r.json)
-        assertions    = data['manifests'].values.first['assertions']
+        active        = data['active_manifest']
+        assertions    = data['manifests'][active]['assertions']
         action_assert = assertions.select { |a| a['label'].start_with?('c2pa.actions') }
         actions       = action_assert.flat_map { |a| a.dig('data', 'actions') || [] }
         expect(actions.any? { |a| a['action'] == 'c2pa.published' }).to be(true)
@@ -121,7 +198,7 @@ RSpec.describe C2pa::Builder do
       s   = C2pa::Signer.from_info(alg: 'es256', cert: cert, key: key, ta_url: nil)
       b   = described_class.new(manifest_json)
       dst = StringIO.new(''.b)
-      expect { b.sign(s, 'image/jpeg', File.open(source, 'rb'), dst) }.not_to raise_error
+      with_source { |f| expect { b.sign(s, 'image/jpeg', f, dst) }.not_to raise_error }
       s.close
       b.close
     end
@@ -129,18 +206,18 @@ RSpec.describe C2pa::Builder do
     it 'raises ClosedError after close' do
       b = described_class.new(manifest_json)
       b.close
-      expect do
-        b.sign(signer, 'image/jpeg', File.open(source, 'rb'), StringIO.new(''.b))
-      end.to raise_error(C2pa::ClosedError)
+      with_source do |f|
+        expect { b.sign(signer, 'image/jpeg', f, StringIO.new(''.b)) }.to raise_error(C2pa::ClosedError)
+      end
     end
 
     it 'raises ClosedError when signer is closed' do
       s = C2pa::Signer.from_info(alg: 'es256', cert: cert, key: key)
       s.close
       b = described_class.new(manifest_json)
-      expect do
-        b.sign(s, 'image/jpeg', File.open(source, 'rb'), StringIO.new(''.b))
-      end.to raise_error(C2pa::ClosedError)
+      with_source do |f|
+        expect { b.sign(s, 'image/jpeg', f, StringIO.new(''.b)) }.to raise_error(C2pa::ClosedError)
+      end
       b.close
     end
   end
@@ -168,8 +245,17 @@ RSpec.describe C2pa::Builder do
       with_gc_stress do
         b   = described_class.new(manifest_json)
         dst = StringIO.new(''.b)
-        b.sign(signer, 'image/jpeg', File.open(source, 'rb'), dst)
+        with_source { |f| b.sign(signer, 'image/jpeg', f, dst) }
         expect(dst.string.bytesize).to be > 0
+        b.close
+      end
+    end
+
+    it 'survives GC stress during add_ingredient' do
+      with_gc_stress do
+        b = described_class.new(manifest_json)
+        with_source { |f| b.add_ingredient({ 'title' => 'source.jpg' }, 'image/jpeg', f) }
+        expect(b.closed?).to be(false)
         b.close
       end
     end

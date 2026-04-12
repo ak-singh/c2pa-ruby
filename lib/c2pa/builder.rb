@@ -116,6 +116,27 @@ module C2pa
       raise C2pa::Error, "c2pa_builder_add_action failed: #{API.last_error}" if result != 0
     end
 
+    # Attaches an ingredient (source asset) to the manifest.
+    #
+    # @param ingredient_json [String, Hash] ingredient definition
+    # @param mime_type       [String] e.g. "image/jpeg"
+    # @param source_io       [IO]     readable, seekable
+    # @raise [C2pa::Error] if the ingredient is invalid
+    def add_ingredient(ingredient_json, mime_type, source_io)
+      check_open!
+
+      json_str = ingredient_json.is_a?(Hash) ? JSON.generate(ingredient_json) : ingredient_json
+
+      stream = nil
+      begin
+        stream = Stream.new(source_io)
+        result = API.c2pa_builder_add_ingredient_from_stream(@ptr, json_str, mime_type, stream.ptr)
+        raise C2pa::Error, "c2pa_builder_add_ingredient_from_stream failed: #{API.last_error}" if result != 0
+      ensure
+        stream&.close
+      end
+    end
+
     # Signs the source asset and writes the signed output to dest_io.
     #
     # @param signer    [C2pa::Signer]

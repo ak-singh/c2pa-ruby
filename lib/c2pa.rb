@@ -27,6 +27,18 @@ module C2pa
       API.read_and_free_string(ptr)
     end
 
+    # Returns the c2pa-rs version embedded in the native library.
+    #
+    # @return [String] e.g. "0.67.1"
+    # @raise [C2pa::Error] if the version string does not contain a c2pa-rs component
+    def sdk_version
+      v = version
+      part = v.split.find { |p| p.start_with?('c2pa-rs/') }
+      raise C2pa::Error, "c2pa-rs version not found in: #{v}" unless part
+
+      part.split('/', 2).last
+    end
+
     # Configures library behavior from a JSON string or Hash.
     # Settings are thread-local. Common uses: disable thumbnails, control
     # auto-actions, disable remote manifest fetch.

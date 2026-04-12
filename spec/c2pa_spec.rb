@@ -21,6 +21,21 @@ RSpec.describe C2pa do
     end
   end
 
+  describe '.sdk_version' do
+    it 'returns a semantic version string' do
+      expect(described_class.sdk_version).to match(/\A\d+\.\d+\.\d+\z/)
+    end
+
+    it 'is the version number from the c2pa-rs component' do
+      expect(described_class.version).to include("c2pa-rs/#{described_class.sdk_version}")
+    end
+
+    it 'raises C2pa::Error if the version string has no c2pa-rs component' do
+      allow(described_class).to receive(:version).and_return('some-lib/1.0.0')
+      expect { described_class.sdk_version }.to raise_error(C2pa::Error, /c2pa-rs version not found/)
+    end
+  end
+
   describe '.version' do
     subject(:ver) { described_class.version }
 

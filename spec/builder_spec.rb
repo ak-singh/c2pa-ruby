@@ -48,6 +48,56 @@ RSpec.describe C2pa::Builder do
     end
   end
 
+  describe '#set_remote_url' do
+    it 'embeds the URL as XMP provenance in the signed asset' do
+      signer = C2pa::Signer.from_info(alg: 'es256', cert: cert, key: key)
+      b      = described_class.from_manifest(manifest_json)
+      b.set_remote_url('http://this_does_not_exist/manifest.c2pa')
+      dst = StringIO.new(''.b)
+      with_source { |f| b.sign(signer, 'image/jpeg', f, dst) }
+      signer.close
+      b.close
+      expect(dst.string).to include('provenance="http://this_does_not_exist/manifest.c2pa"')
+    end
+
+    it 'raises ClosedError after close' do
+      b = described_class.from_manifest(manifest_json)
+      b.close
+      expect { b.set_remote_url('https://cdn.example.com/manifest.c2pa') }.to raise_error(C2pa::ClosedError)
+    end
+  end
+
+  describe '#set_no_embed' do
+    it 'does not raise' do
+      b = described_class.from_manifest(manifest_json)
+      expect { b.set_no_embed }.not_to raise_error
+      b.close
+    end
+
+    it 'raises ClosedError after close' do
+      b = described_class.from_manifest(manifest_json)
+      b.close
+      expect { b.set_no_embed }.to raise_error(C2pa::ClosedError)
+    end
+
+    # TODO: strengthen this test once load_settings and Reader.open with manifest bytes
+    # are implemented — assert Reader raises with the URL (via load_settings disabling
+    # remote fetch) and assert round-trip via Reader.open(mime, io, manifest_bytes).
+    it 'returns manifest bytes and writes a non-empty asset' do
+      signer = C2pa::Signer.from_info(alg: 'es256', cert: cert, key: key)
+      b      = described_class.from_manifest(manifest_json)
+      b.set_remote_url('https://cdn.example.com/manifest.c2pa')
+      b.set_no_embed
+      dst   = StringIO.new(''.b)
+      bytes = nil
+      with_source { |f| bytes = b.sign(signer, 'image/jpeg', f, dst) }
+      expect(bytes.bytesize).to be > 0
+      expect(dst.string.bytesize).to be > 0
+      signer.close
+      b.close
+    end
+  end
+
   describe '#add_action' do
     it 'accepts a bare action label string' do
       b = described_class.from_manifest(manifest_json)

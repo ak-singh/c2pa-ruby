@@ -122,6 +122,24 @@ module C2pa
 
     private_class_method :new
 
+    # Sets the remote URL where the manifest will be hosted.
+    # Combine with {#set_no_embed} to omit the manifest from the asset entirely.
+    #
+    # @param url [String] remote manifest URL
+    # @raise [C2pa::Error] if the URL is invalid
+    def set_remote_url(url)
+      check_open!
+      result = API.c2pa_builder_set_remote_url(@ptr, url)
+      raise C2pa::Error, "c2pa_builder_set_remote_url failed: #{API.last_error}" if result != 0
+    end
+
+    # Prevents the manifest from being embedded in the asset.
+    # The manifest bytes returned by {#sign} can then be hosted externally.
+    def set_no_embed
+      check_open!
+      API.c2pa_builder_set_no_embed(@ptr)
+    end
+
     # Appends an action. Multiple calls accumulate into a single c2pa.actions assertion.
     #
     # @param action_json [String, Hash] bare label ("c2pa.published"),

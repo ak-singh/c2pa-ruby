@@ -38,6 +38,8 @@ module C2pa
       c2pa_builder_from_archive
       c2pa_builder_add_action
       c2pa_builder_add_ingredient_from_stream
+      c2pa_builder_set_remote_url
+      c2pa_builder_set_no_embed
       c2pa_builder_to_archive
       c2pa_builder_sign
       c2pa_builder_free
@@ -80,6 +82,8 @@ module C2pa
     # Builder — creates and signs manifests
     attach_function :c2pa_builder_from_json,              [:string],                              :pointer
     attach_function :c2pa_builder_from_archive,           [:pointer],                             :pointer
+    attach_function :c2pa_builder_set_remote_url,         %i[pointer string],                     :int
+    attach_function :c2pa_builder_set_no_embed,           [:pointer],                             :void
     attach_function :c2pa_builder_add_action,             %i[pointer string],                     :int
     attach_function :c2pa_builder_add_ingredient_from_stream, %i[pointer string string pointer],  :int
     attach_function :c2pa_builder_to_archive,             %i[pointer pointer],                    :int

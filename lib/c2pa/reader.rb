@@ -140,7 +140,7 @@ module C2pa
       API.read_and_free_string(ptr)
     end
 
-    # Idempotent — safe to call more than once.
+    # Idempotent.
     def close
       return if @closed
 

@@ -18,10 +18,8 @@ module C2pa
       raise C2pa::LibraryNotFoundError, "Failed to load native library: #{e.message}"
     end
 
-    # Required symbols validated against the raw library object BEFORE attach_function,
-    # mirroring the Python SDK's _validate_library_exports pattern. Running before
-    # attach_function means we control the error message — otherwise FFI raises its own
-    # FFI::NotFoundError with no context about version compatibility.
+    # Validated before attach_function so missing symbols produce a clear version
+    # mismatch error rather than FFI::NotFoundError with no context.
     REQUIRED_FUNCTIONS = %w[
       c2pa_version
       c2pa_error
@@ -37,8 +35,10 @@ module C2pa
       c2pa_signer_from_info
       c2pa_signer_free
       c2pa_builder_from_json
+      c2pa_builder_from_archive
       c2pa_builder_add_action
       c2pa_builder_add_ingredient_from_stream
+      c2pa_builder_to_archive
       c2pa_builder_sign
       c2pa_builder_free
       c2pa_manifest_bytes_free
@@ -79,8 +79,10 @@ module C2pa
 
     # Builder — creates and signs manifests
     attach_function :c2pa_builder_from_json,              [:string],                              :pointer
+    attach_function :c2pa_builder_from_archive,           [:pointer],                             :pointer
     attach_function :c2pa_builder_add_action,             %i[pointer string],                     :int
     attach_function :c2pa_builder_add_ingredient_from_stream, %i[pointer string string pointer],  :int
+    attach_function :c2pa_builder_to_archive,             %i[pointer pointer],                    :int
     attach_function :c2pa_builder_sign,                   %i[pointer string pointer pointer pointer pointer], :int64
     attach_function :c2pa_builder_free,                   [:pointer],                             :void
     attach_function :c2pa_manifest_bytes_free,            [:pointer],                             :void
@@ -99,9 +101,7 @@ module C2pa
       _read_and_free(ptr)
     end
 
-    # Reads a C string, validates UTF-8, frees the pointer, and returns the string.
-    # Raises C2pa::Error if the bytes are not valid UTF-8 — consistent with the
-    # Python SDK's decode('utf-8', errors='strict') behaviour.
+    # Reads, validates UTF-8, and frees a C string pointer.
     def self._read_and_free(ptr)
       raw = ptr.read_string
       c2pa_string_free(ptr)

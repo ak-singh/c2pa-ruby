@@ -56,7 +56,7 @@ module C2pa
       @closed = false
     end
 
-    # Idempotent — safe to call more than once.
+    # Idempotent.
     def close
       return if @closed
 
@@ -77,7 +77,7 @@ module C2pa
   #
   # @example
   #   signer  = C2pa::Signer.from_info(alg: 'es256', cert: cert_pem, key: key_pem)
-  #   builder = C2pa::Builder.new('{"claim_generator":"my-app/1.0","assertions":[]}')
+  #   builder = C2pa::Builder.from_manifest('{"claim_generator":"my-app/1.0","assertions":[]}')
   #   builder.add_action('c2pa.published')
   #
   #   File.open('input.jpg', 'rb') do |src|
@@ -88,17 +88,39 @@ module C2pa
   #
   #   signer.close
   #   builder.close
-  class Builder
-    # @param manifest_json [String, Hash] accepts a Hash or a JSON string
+  class Builder # rubocop:disable Metrics/ClassLength
+    # @param manifest [String, Hash] manifest definition — Hash or JSON string
+    # @return [C2pa::Builder]
     # @raise [C2pa::Error] if the JSON is invalid
-    def initialize(manifest_json)
-      @closed = false
-      @ptr    = FFI::Pointer::NULL
+    def self.from_manifest(manifest)
+      json_str = manifest.is_a?(Hash) ? JSON.generate(manifest) : manifest
+      ptr = API.c2pa_builder_from_json(json_str)
+      raise C2pa::Error, "c2pa_builder_from_json failed: #{API.last_error}" if ptr.null?
 
-      json_str = manifest_json.is_a?(Hash) ? JSON.generate(manifest_json) : manifest_json
-      @ptr = API.c2pa_builder_from_json(json_str)
-      raise C2pa::Error, "c2pa_builder_from_json failed: #{API.last_error}" if @ptr.null?
+      new(ptr)
     end
+
+    # Restores a Builder from an archive written by {#to_archive}.
+    #
+    # @param archive_io [IO] readable, seekable
+    # @return [C2pa::Builder]
+    # @raise [C2pa::Error] if the archive is invalid
+    def self.from_archive(archive_io)
+      stream = nil
+      ptr    = FFI::Pointer::NULL
+      begin
+        stream    = Stream.new(archive_io)
+        ptr       = API.c2pa_builder_from_archive(stream.ptr)
+        error_msg = API.last_error if ptr.null?
+      ensure
+        stream&.close
+      end
+      raise C2pa::Error, "c2pa_builder_from_archive failed: #{error_msg}" if ptr.null?
+
+      new(ptr)
+    end
+
+    private_class_method :new
 
     # Appends an action. Multiple calls accumulate into a single c2pa.actions assertion.
     #
@@ -116,7 +138,7 @@ module C2pa
       raise C2pa::Error, "c2pa_builder_add_action failed: #{API.last_error}" if result != 0
     end
 
-    # Attaches an ingredient (source asset) to the manifest.
+    # Attaches an ingredient to the manifest.
     #
     # @param ingredient_json [String, Hash] ingredient definition
     # @param mime_type       [String] e.g. "image/jpeg"
@@ -132,6 +154,24 @@ module C2pa
         stream = Stream.new(source_io)
         result = API.c2pa_builder_add_ingredient_from_stream(@ptr, json_str, mime_type, stream.ptr)
         raise C2pa::Error, "c2pa_builder_add_ingredient_from_stream failed: #{API.last_error}" if result != 0
+      ensure
+        stream&.close
+      end
+    end
+
+    # Serializes builder state (ingredient hashes + manifest template) to an archive.
+    # Restore with {Builder.from_archive}.
+    #
+    # @param dest_io [IO] writable, seekable
+    # @raise [C2pa::Error] if serialization fails
+    def to_archive(dest_io)
+      check_open!
+
+      stream = nil
+      begin
+        stream = Stream.new(dest_io)
+        result = API.c2pa_builder_to_archive(@ptr, stream.ptr)
+        raise C2pa::Error, "c2pa_builder_to_archive failed: #{API.last_error}" if result != 0
       ensure
         stream&.close
       end
@@ -169,7 +209,7 @@ module C2pa
       read_manifest_bytes(manifest_bytes_ptr, result)
     end
 
-    # Idempotent — safe to call more than once.
+    # Idempotent.
     def close
       return if @closed
 
@@ -182,6 +222,11 @@ module C2pa
     end
 
     private
+
+    def initialize(ptr)
+      @closed = false
+      @ptr    = ptr
+    end
 
     def check_open!
       raise C2pa::ClosedError, 'Builder' if @closed

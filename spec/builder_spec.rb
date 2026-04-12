@@ -118,10 +118,7 @@ RSpec.describe C2pa::Builder do
       expect { b.set_no_embed }.to raise_error(C2pa::ClosedError)
     end
 
-    # TODO: strengthen this test once load_settings and Reader.open with manifest bytes
-    # are implemented — assert Reader raises with the URL (via load_settings disabling
-    # remote fetch) and assert round-trip via Reader.open(mime, io, manifest_bytes).
-    it 'returns manifest bytes and writes a non-empty asset' do
+    it 'returns manifest bytes and signed asset is readable via Reader with those bytes' do
       signer = C2pa::Signer.from_info(alg: 'es256', cert: cert, key: key)
       b      = described_class.from_manifest(manifest_json)
       b.set_remote_url('https://cdn.example.com/manifest.c2pa')
@@ -129,10 +126,22 @@ RSpec.describe C2pa::Builder do
       dst   = StringIO.new(''.b)
       bytes = nil
       with_source { |f| bytes = b.sign(signer, 'image/jpeg', f, dst) }
-      expect(bytes.bytesize).to be > 0
-      expect(dst.string.bytesize).to be > 0
       signer.close
       b.close
+
+      expect(bytes.bytesize).to be > 0
+      expect(dst.string.bytesize).to be > 0
+
+      # Asset has no embedded manifest — Reader without bytes raises
+      dst.rewind
+      expect { C2pa::Reader.open('image/jpeg', dst) }.to raise_error(C2pa::Error)
+
+      # Reader with manifest bytes can read the manifest
+      dst.rewind
+      C2pa::Reader.open('image/jpeg', dst, bytes) do |r|
+        data = JSON.parse(r.json)
+        expect(data).to have_key('manifests')
+      end
     end
   end
 

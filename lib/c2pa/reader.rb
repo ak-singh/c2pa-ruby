@@ -88,11 +88,13 @@ module C2pa
       API.read_and_free_string_array(ptr, count_ptr)
     end
 
-    # @param mime_type [String] e.g. "image/jpeg"
-    # @param io        [IO]    readable, seekable
+    # @param mime_type      [String]      e.g. "image/jpeg"
+    # @param io             [IO]          readable, seekable
+    # @param manifest_bytes [String, nil] raw manifest bytes returned by {Builder#sign};
+    #   pass when the asset has no embedded manifest (signed with {Builder#set_no_embed})
     # @yieldparam reader [C2pa::Reader]
-    def self.open(mime_type, io)
-      reader = new(mime_type, io)
+    def self.open(mime_type, io, manifest_bytes = nil)
+      reader = new(mime_type, io, manifest_bytes)
       return reader unless block_given?
 
       begin
@@ -102,18 +104,28 @@ module C2pa
       end
     end
 
-    def initialize(mime_type, io)
+    def initialize(mime_type, io, manifest_bytes = nil) # rubocop:disable Metrics/AbcSize
+      raise TypeError, 'manifest_bytes must be a String' if manifest_bytes && !manifest_bytes.is_a?(String)
+
       @closed = false
       @ptr    = FFI::Pointer::NULL
       @stream = Stream.new(io)
-      @ptr    = API.c2pa_reader_from_stream(mime_type, @stream.ptr)
+      @ptr    = if manifest_bytes
+                  data_ptr = FFI::MemoryPointer.new(:uint8, [manifest_bytes.bytesize, 1].max)
+                  data_ptr.put_bytes(0, manifest_bytes)
+                  API.c2pa_reader_from_manifest_data_and_stream(mime_type, @stream.ptr, data_ptr,
+                                                                manifest_bytes.bytesize)
+                else
+                  API.c2pa_reader_from_stream(mime_type, @stream.ptr)
+                end
 
       return unless @ptr.null?
 
       # Capture error before @stream.close — any C call can overwrite the slot.
       error_msg = API.last_error
       @stream.close
-      raise C2pa::Error, "c2pa_reader_from_stream failed: #{error_msg}"
+      fn = manifest_bytes ? 'c2pa_reader_from_manifest_data_and_stream' : 'c2pa_reader_from_stream'
+      raise C2pa::Error, "#{fn} failed: #{error_msg}"
     end
 
     # @return [String] manifest store as JSON

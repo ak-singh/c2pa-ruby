@@ -23,6 +23,60 @@ RSpec.describe C2pa::Reader do
     end
   end
 
+  describe '.open with manifest_bytes' do
+    let(:cert) { File.read(fixture('es256_certs.pem')) }
+    let(:key)  { File.read(fixture('es256_private.key')) }
+    let(:source) { fixture('C.jpg') }
+
+    def sign_no_embed
+      signer  = C2pa::Signer.from_info(alg: 'es256', cert: cert, key: key)
+      builder = C2pa::Builder.from_manifest(
+        'claim_generator' => 'c2pa-ruby-test/0.1.0', 'assertions' => []
+      )
+      builder.set_remote_url('https://cdn.example.com/manifest.c2pa')
+      builder.set_no_embed
+      dst   = StringIO.new(''.b)
+      bytes = File.open(source, 'rb') { |f| builder.sign(signer, 'image/jpeg', f, dst) }
+      [dst, bytes]
+    ensure
+      signer&.close
+      builder&.close
+    end
+
+    it 'reads manifest from externally-supplied bytes (set_no_embed round-trip)' do
+      dst, bytes = sign_no_embed
+      dst.rewind
+      described_class.open('image/jpeg', dst, bytes) do |r|
+        data = JSON.parse(r.json)
+        expect(data).to have_key('manifests')
+      end
+    end
+
+    it 'raises C2pa::Error when asset has no embedded manifest and no bytes given' do
+      dst, = sign_no_embed
+      dst.rewind
+      expect do
+        described_class.open('image/jpeg', dst)
+      end.to raise_error(C2pa::Error)
+    end
+
+    it 'raises TypeError for non-String manifest_bytes' do
+      File.open(source, 'rb') do |f|
+        expect do
+          described_class.open('image/jpeg', f, 12_345)
+        end.to raise_error(TypeError, /manifest_bytes/)
+      end
+    end
+
+    it 'raises C2pa::Error for empty manifest_bytes' do
+      File.open(source, 'rb') do |f|
+        expect do
+          described_class.open('image/jpeg', f, '')
+        end.to raise_error(C2pa::Error)
+      end
+    end
+  end
+
   describe '.open without a block' do
     it 'returns a Reader instance' do
       reader = described_class.open('image/jpeg', File.open(signed_jpeg, 'rb'))
@@ -131,12 +185,16 @@ RSpec.describe C2pa::Reader do
       expect { reader.remote_url }.to raise_error(C2pa::ClosedError)
     end
 
-    # TODO: the non-nil path is untested. The Rust SDK auto-fetches the remote
-    #       manifest inside c2pa_reader_from_stream — Reader.open fails with no
-    #       internet and succeeds with internet. A fixture file alone is not
-    #       enough; this requires a live network call (integration test).
-    #       Tag as :integration and exclude from the default suite when implemented.
-    it 'returns a String when the manifest is remote'
+    it 'returns a String when the manifest is remote' do
+      # cloud.jpg has a remote manifest hosted on Adobe's CDN. The SDK fetches it
+      # automatically; remote_url returns the URL after a successful fetch.
+      described_class.open('image/jpeg', File.open(fixture('cloud.jpg'), 'rb')) do |r|
+        url = r.remote_url
+        expect(url).to be_a(String)
+        expect(url).not_to be_empty
+        expect(r.embedded?).to be(false)
+      end
+    end
   end
 
   describe '#close' do

@@ -28,6 +28,7 @@ module C2pa
       c2pa_create_stream
       c2pa_release_stream
       c2pa_reader_from_stream
+      c2pa_reader_from_manifest_data_and_stream
       c2pa_reader_json
       c2pa_reader_detailed_json
       c2pa_reader_is_embedded
@@ -76,7 +77,8 @@ module C2pa
                     :pointer
     attach_function :c2pa_release_stream, [:pointer], :void
 
-    attach_function :c2pa_reader_from_stream,        %i[string pointer],  :pointer
+    attach_function :c2pa_reader_from_stream, %i[string pointer], :pointer
+    attach_function :c2pa_reader_from_manifest_data_and_stream, %i[string pointer pointer size_t], :pointer
     attach_function :c2pa_reader_json,               [:pointer],          :pointer
     attach_function :c2pa_reader_detailed_json,      [:pointer],          :pointer
     attach_function :c2pa_reader_is_embedded,        [:pointer],          :int

@@ -101,7 +101,7 @@ module C2pa
   #
   #   signer.close
   #   builder.close
-  class Builder # rubocop:disable Metrics/ClassLength, Naming/AccessorMethodName
+  class Builder # rubocop:disable Metrics/ClassLength
     # Returns the MIME types supported by the builder.
     # @return [Array<String>]
     def self.supported_mime_types
@@ -149,7 +149,7 @@ module C2pa
     #
     # @param url [String] remote manifest URL
     # @raise [C2pa::Error] if the URL is invalid
-    def set_remote_url(url)
+    def set_remote_url(url) # rubocop:disable Naming/AccessorMethodName
       check_open!
       result = API.c2pa_builder_set_remote_url(@ptr, url)
       raise C2pa::Error, "c2pa_builder_set_remote_url failed: #{API.last_error}" if result != 0

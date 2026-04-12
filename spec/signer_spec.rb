@@ -27,6 +27,21 @@ RSpec.describe C2pa::Signer do
     end
   end
 
+  describe '#reserve_size' do
+    it 'returns a positive integer' do
+      s = described_class.from_info(alg: 'es256', cert: cert, key: key)
+      expect(s.reserve_size).to be_a(Integer)
+      expect(s.reserve_size).to be > 0
+      s.close
+    end
+
+    it 'raises ClosedError after close' do
+      s = described_class.from_info(alg: 'es256', cert: cert, key: key)
+      s.close
+      expect { s.reserve_size }.to raise_error(C2pa::ClosedError)
+    end
+  end
+
   describe '#close' do
     it 'marks the signer as closed' do
       s = described_class.from_info(alg: 'es256', cert: cert, key: key)

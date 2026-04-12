@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'json'
 require_relative 'c2pa/version'
 require_relative 'c2pa/error'
 require_relative 'c2pa/loader'
@@ -24,6 +25,22 @@ module C2pa
       raise C2pa::Error, 'c2pa_version returned null' if ptr.null?
 
       API.read_and_free_string(ptr)
+    end
+
+    # Configures library behavior from a JSON string or Hash.
+    # Settings are thread-local. Common uses: disable thumbnails, control
+    # auto-actions, disable remote manifest fetch.
+    #
+    # @param settings [String, Hash] JSON string or Hash of settings
+    # @raise [C2pa::Error] if the settings are invalid
+    #
+    # @example
+    #   C2pa.load_settings('{"verify": {"remote_manifest_fetch": false}}')
+    #   C2pa.load_settings({ 'builder' => { 'thumbnail' => { 'enabled' => false } } })
+    def load_settings(settings)
+      json_str = settings.is_a?(Hash) ? JSON.generate(settings) : settings
+      result   = API.c2pa_load_settings(json_str, 'json')
+      raise C2pa::Error, "c2pa_load_settings failed: #{API.last_error}" if result != 0
     end
   end
 end

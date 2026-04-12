@@ -18,6 +18,44 @@ RSpec.describe C2pa::Builder do
     File.open(source, 'rb', &block)
   end
 
+  describe '.supported_mime_types' do
+    it 'returns a non-empty array of strings' do
+      types = described_class.supported_mime_types
+      expect(types).to be_an(Array)
+      expect(types).not_to be_empty
+      expect(types).to all(be_a(String))
+    end
+
+    it 'includes image/jpeg' do
+      expect(described_class.supported_mime_types).to include('image/jpeg')
+    end
+  end
+
+  describe '#add_resource' do
+    it 'embeds the resource in the signed manifest' do
+      signer = C2pa::Signer.from_info(alg: 'es256', cert: cert, key: key)
+      b      = described_class.from_manifest(manifest_json)
+      dst    = StringIO.new(''.b)
+      with_source { |f| b.add_resource('thumbnail', f) }
+      with_source { |f| b.sign(signer, 'image/jpeg', f, dst) }
+      signer.close
+      b.close
+
+      dst.rewind
+      C2pa::Reader.open('image/jpeg', dst) do |r|
+        data   = JSON.parse(r.json)
+        active = data['active_manifest']
+        expect(data['manifests'][active]['thumbnail']).not_to be_nil
+      end
+    end
+
+    it 'raises ClosedError after close' do
+      b = described_class.from_manifest(manifest_json)
+      b.close
+      with_source { |f| expect { b.add_resource('thumbnail', f) }.to raise_error(C2pa::ClosedError) }
+    end
+  end
+
   describe '.from_manifest' do
     it 'accepts a JSON string' do
       b = described_class.from_manifest(JSON.generate(manifest_json))
@@ -221,7 +259,6 @@ RSpec.describe C2pa::Builder do
         expect(data).to have_key('manifests')
       end
     end
-
 
     it 'from_archive returns a Builder that is not closed' do
       b1      = described_class.from_manifest(manifest_json)

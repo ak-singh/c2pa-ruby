@@ -80,6 +80,14 @@ module C2pa
   #     puts r.json
   #   end
   class Reader
+    # Returns the MIME types supported by the reader.
+    # @return [Array<String>]
+    def self.supported_mime_types
+      count_ptr = FFI::MemoryPointer.new(:size_t)
+      ptr       = API.c2pa_reader_supported_mime_types(count_ptr)
+      API.read_and_free_string_array(ptr, count_ptr)
+    end
+
     # @param mime_type [String] e.g. "image/jpeg"
     # @param io        [IO]    readable, seekable
     # @yieldparam reader [C2pa::Reader]

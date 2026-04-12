@@ -10,6 +10,19 @@ RSpec.describe C2pa::Reader do
   let(:signed_jpeg)    { fixture('C.jpg') }
   let(:unsigned_jpeg)  { fixture('earth_apollo17.jpg') }
 
+  describe '.supported_mime_types' do
+    it 'returns a non-empty array of strings' do
+      types = described_class.supported_mime_types
+      expect(types).to be_an(Array)
+      expect(types).not_to be_empty
+      expect(types).to all(be_a(String))
+    end
+
+    it 'includes image/jpeg' do
+      expect(described_class.supported_mime_types).to include('image/jpeg')
+    end
+  end
+
   describe '.open without a block' do
     it 'returns a Reader instance' do
       reader = described_class.open('image/jpeg', File.open(signed_jpeg, 'rb'))

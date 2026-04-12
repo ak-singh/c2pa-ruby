@@ -3,6 +3,24 @@
 require 'spec_helper'
 
 RSpec.describe C2pa do
+  describe '.load_settings' do
+    it 'accepts a JSON string' do
+      expect { described_class.load_settings('{"verify":{"remote_manifest_fetch":false}}') }.not_to raise_error
+    end
+
+    it 'accepts a Hash' do
+      expect { described_class.load_settings({ 'verify' => { 'remote_manifest_fetch' => false } }) }.not_to raise_error
+    end
+
+    it 'raises C2pa::Error for invalid JSON' do
+      expect { described_class.load_settings('{ not valid json }') }.to raise_error(C2pa::Error)
+    end
+
+    after do
+      described_class.load_settings('{"verify":{"remote_manifest_fetch":true}}')
+    end
+  end
+
   describe '.version' do
     subject(:ver) { described_class.version }
 

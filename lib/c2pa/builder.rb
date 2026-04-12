@@ -68,8 +68,21 @@ module C2pa
       @closed
     end
 
+    # Returns the signature buffer size needed for pre-allocation.
+    # @return [Integer]
+    def reserve_size
+      check_open!
+      API.c2pa_signer_reserve_size(@ptr)
+    end
+
     # @api private
     attr_reader :ptr
+
+    private
+
+    def check_open!
+      raise C2pa::ClosedError, 'Signer' if @closed
+    end
   end
 
   # Builds and signs C2PA manifests.
@@ -88,7 +101,15 @@ module C2pa
   #
   #   signer.close
   #   builder.close
-  class Builder # rubocop:disable Metrics/ClassLength
+  class Builder # rubocop:disable Metrics/ClassLength, Naming/AccessorMethodName
+    # Returns the MIME types supported by the builder.
+    # @return [Array<String>]
+    def self.supported_mime_types
+      count_ptr = FFI::MemoryPointer.new(:size_t)
+      ptr       = API.c2pa_builder_supported_mime_types(count_ptr)
+      API.read_and_free_string_array(ptr, count_ptr)
+    end
+
     # @param manifest [String, Hash] manifest definition — Hash or JSON string
     # @return [C2pa::Builder]
     # @raise [C2pa::Error] if the JSON is invalid
@@ -106,8 +127,9 @@ module C2pa
     # @return [C2pa::Builder]
     # @raise [C2pa::Error] if the archive is invalid
     def self.from_archive(archive_io)
-      stream = nil
-      ptr    = FFI::Pointer::NULL
+      stream    = nil
+      ptr       = FFI::Pointer::NULL
+      error_msg = nil
       begin
         stream    = Stream.new(archive_io)
         ptr       = API.c2pa_builder_from_archive(stream.ptr)
@@ -172,6 +194,25 @@ module C2pa
         stream = Stream.new(source_io)
         result = API.c2pa_builder_add_ingredient_from_stream(@ptr, json_str, mime_type, stream.ptr)
         raise C2pa::Error, "c2pa_builder_add_ingredient_from_stream failed: #{API.last_error}" if result != 0
+      ensure
+        stream&.close
+      end
+    end
+
+    # Attaches a binary resource to the manifest, identified by URI.
+    # Useful for thumbnails, icons, or custom data referenced from assertions.
+    #
+    # @param uri       [String] resource identifier (e.g. "thumbnail")
+    # @param source_io [IO]    readable, seekable
+    # @raise [C2pa::Error] if the resource cannot be added
+    def add_resource(uri, source_io)
+      check_open!
+
+      stream = nil
+      begin
+        stream = Stream.new(source_io)
+        result = API.c2pa_builder_add_resource(@ptr, uri, stream.ptr)
+        raise C2pa::Error, "c2pa_builder_add_resource failed: #{API.last_error}" if result != 0
       ensure
         stream&.close
       end

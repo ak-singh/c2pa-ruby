@@ -114,6 +114,111 @@ RSpec.describe C2pa::Reader do
     end
   end
 
+  describe '#active_manifest' do
+    it 'returns a Hash for a signed file' do
+      described_class.open('image/jpeg', File.open(signed_jpeg, 'rb')) do |r|
+        expect(r.active_manifest).to be_a(Hash)
+      end
+    end
+
+    it 'raises ClosedError after close' do
+      reader = described_class.open('image/jpeg', File.open(signed_jpeg, 'rb'))
+      reader.close
+      expect { reader.active_manifest }.to raise_error(C2pa::ClosedError)
+    end
+  end
+
+  describe '#manifest' do
+    it 'returns the manifest Hash for a valid label' do
+      described_class.open('image/jpeg', File.open(signed_jpeg, 'rb')) do |r|
+        data  = JSON.parse(r.json)
+        label = data['active_manifest']
+        expect(r.manifest(label)).to be_a(Hash)
+      end
+    end
+
+    it 'returns nil for an unknown label' do
+      described_class.open('image/jpeg', File.open(signed_jpeg, 'rb')) do |r|
+        expect(r.manifest('nonexistent')).to be_nil
+      end
+    end
+
+    it 'raises ClosedError after close' do
+      reader = described_class.open('image/jpeg', File.open(signed_jpeg, 'rb'))
+      reader.close
+      expect { reader.manifest('x') }.to raise_error(C2pa::ClosedError)
+    end
+  end
+
+  describe '#validation_state' do
+    it 'returns a String for a signed file' do
+      described_class.open('image/jpeg', File.open(signed_jpeg, 'rb')) do |r|
+        expect(r.validation_state).to be_a(String).or be_nil
+      end
+    end
+
+    it 'raises ClosedError after close' do
+      reader = described_class.open('image/jpeg', File.open(signed_jpeg, 'rb'))
+      reader.close
+      expect { reader.validation_state }.to raise_error(C2pa::ClosedError)
+    end
+  end
+
+  describe '#validation_results' do
+    it 'returns a Hash or nil for a signed file' do
+      described_class.open('image/jpeg', File.open(signed_jpeg, 'rb')) do |r|
+        result = r.validation_results
+        expect(result).to be_a(Hash).or be_nil
+      end
+    end
+
+    it 'raises ClosedError after close' do
+      reader = described_class.open('image/jpeg', File.open(signed_jpeg, 'rb'))
+      reader.close
+      expect { reader.validation_results }.to raise_error(C2pa::ClosedError)
+    end
+  end
+
+  describe '#resource_to_stream' do
+    let(:cert)   { File.read(fixture('es256_certs.pem')) }
+    let(:key)    { File.read(fixture('es256_private.key')) }
+    let(:source) { fixture('C.jpg') }
+
+    it 'writes a resource to dest_io and returns bytes written' do
+      signer  = C2pa::Signer.from_info(alg: 'es256', cert: cert, key: key)
+      builder = C2pa::Builder.from_manifest('claim_generator' => 'test/1.0', 'assertions' => [])
+      dst     = StringIO.new(''.b)
+      File.open(source, 'rb') { |f| builder.add_resource('thumbnail', f) }
+      File.open(source, 'rb') { |f| builder.sign(signer, 'image/jpeg', f, dst) }
+      dst.rewind
+      described_class.open('image/jpeg', dst) do |r|
+        # resource_to_stream requires the full JUMBF identifier from the manifest,
+        # not the short label used in add_resource.
+        uri = r.active_manifest&.dig('thumbnail', 'identifier')
+        expect(uri).to be_a(String), 'expected manifest to contain thumbnail.identifier'
+        out = StringIO.new(''.b)
+        n   = r.resource_to_stream(uri, out)
+        expect(n).to be > 0
+        expect(out.string.bytesize).to eq(n)
+      end
+    ensure
+      signer&.close
+      builder&.close
+    end
+
+    it 'raises C2pa::Error for an unknown URI' do
+      described_class.open('image/jpeg', File.open(signed_jpeg, 'rb')) do |r|
+        expect { r.resource_to_stream('nonexistent', StringIO.new(''.b)) }.to raise_error(C2pa::Error)
+      end
+    end
+
+    it 'raises ClosedError after close' do
+      reader = described_class.open('image/jpeg', File.open(signed_jpeg, 'rb'))
+      reader.close
+      expect { reader.resource_to_stream('x', StringIO.new(''.b)) }.to raise_error(C2pa::ClosedError)
+    end
+  end
+
   describe '#json' do
     it 'returns a non-empty JSON string' do
       described_class.open('image/jpeg', File.open(signed_jpeg, 'rb')) do |r|
@@ -245,6 +350,31 @@ RSpec.describe C2pa::Reader do
           r.remote_url # return value not asserted; verifying no crash
         end
       end
+    end
+
+    it 'survives GC stress during resource_to_stream' do
+      cert    = File.read(fixture('es256_certs.pem'))
+      key     = File.read(fixture('es256_private.key'))
+      source  = fixture('C.jpg')
+      signer  = C2pa::Signer.from_info(alg: 'es256', cert: cert, key: key)
+      builder = C2pa::Builder.from_manifest('claim_generator' => 'test/1.0', 'assertions' => [])
+      dst     = StringIO.new(''.b)
+      File.open(source, 'rb') { |f| builder.add_resource('thumbnail', f) }
+      File.open(source, 'rb') { |f| builder.sign(signer, 'image/jpeg', f, dst) }
+
+      dst.rewind
+      uri = described_class.open('image/jpeg', dst) { |r| r.active_manifest&.dig('thumbnail', 'identifier') }
+      expect(uri).to be_a(String), 'expected manifest to contain thumbnail.identifier'
+
+      with_gc_stress do
+        dst.rewind
+        described_class.open('image/jpeg', dst) do |r|
+          expect(r.resource_to_stream(uri, StringIO.new(''.b))).to be > 0
+        end
+      end
+    ensure
+      signer&.close
+      builder&.close
     end
   end
 end

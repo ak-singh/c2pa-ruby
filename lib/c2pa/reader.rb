@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'json'
+
 module C2pa
   # Bridges a Ruby IO object to the C2paStream callback interface.
   # Callbacks are stored as instance variables to prevent GC collection
@@ -79,7 +81,7 @@ module C2pa
   #   C2pa::Reader.open('image/jpeg', File.open('photo.jpg', 'rb')) do |r|
   #     puts r.json
   #   end
-  class Reader
+  class Reader # rubocop:disable Metrics/ClassLength
     # Returns the MIME types supported by the reader.
     # @return [Array<String>]
     def self.supported_mime_types
@@ -151,6 +153,54 @@ module C2pa
       API.c2pa_reader_is_embedded(@ptr) != 0
     end
 
+    # @return [Hash, nil] the active manifest as a parsed Hash, or nil if none
+    def active_manifest
+      check_open!
+      data = manifest_store
+      return nil unless data&.key?('active_manifest')
+
+      data['manifests']&.fetch(data['active_manifest'], nil)
+    end
+
+    # @param label [String] manifest label
+    # @return [Hash, nil] the manifest for the given label, or nil if not found
+    def manifest(label)
+      check_open!
+      manifest_store&.dig('manifests', label)
+    end
+
+    # @return [String, nil] overall validation state (e.g. "Valid", "Invalid"), or nil if absent
+    def validation_state
+      check_open!
+      manifest_store&.[]('validation_state')
+    end
+
+    # @return [Hash, nil] detailed validation results, or nil if absent
+    def validation_results
+      check_open!
+      manifest_store&.[]('validation_results')
+    end
+
+    # Writes an embedded resource (e.g. thumbnail) to dest_io.
+    #
+    # @param uri     [String] resource identifier as it appears in the manifest
+    # @param dest_io [IO]     writable stream
+    # @return [Integer] number of bytes written
+    # @raise [C2pa::Error] if the resource is not found or write fails
+    def resource_to_stream(uri, dest_io)
+      check_open!
+      stream = nil
+      begin
+        stream = Stream.new(dest_io)
+        result = API.c2pa_reader_resource_to_stream(@ptr, uri, stream.ptr)
+        raise C2pa::Error, "c2pa_reader_resource_to_stream failed: #{API.last_error}" if result.negative?
+
+        result
+      ensure
+        stream&.close
+      end
+    end
+
     # @return [String, nil] remote manifest URL, or nil if embedded
     def remote_url
       check_open!
@@ -174,6 +224,13 @@ module C2pa
     end
 
     private
+
+    # Parses and caches the manifest store JSON.
+    def manifest_store
+      return @manifest_store if defined?(@manifest_store)
+
+      @manifest_store = JSON.parse(json)
+    end
 
     def check_open!
       raise C2pa::ClosedError, 'Reader' if @closed

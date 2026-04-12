@@ -34,6 +34,7 @@ module C2pa
       c2pa_reader_is_embedded
       c2pa_reader_remote_url
       c2pa_reader_supported_mime_types
+      c2pa_reader_resource_to_stream
       c2pa_reader_free
       c2pa_signer_from_info
       c2pa_signer_reserve_size
@@ -83,8 +84,9 @@ module C2pa
     attach_function :c2pa_reader_detailed_json,      [:pointer],          :pointer
     attach_function :c2pa_reader_is_embedded,        [:pointer],          :int
     attach_function :c2pa_reader_remote_url,         [:pointer],          :pointer
-    attach_function :c2pa_reader_supported_mime_types, [:pointer],          :pointer
-    attach_function :c2pa_reader_free,                 [:pointer],          :void
+    attach_function :c2pa_reader_supported_mime_types, [:pointer], :pointer
+    attach_function :c2pa_reader_resource_to_stream,  %i[pointer string pointer], :int64
+    attach_function :c2pa_reader_free,                [:pointer], :void
 
     # Signer — wraps a cert + private key + algorithm into an opaque signer handle
     attach_function :c2pa_signer_from_info,    [:pointer],  :pointer

@@ -15,9 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         ruby: ["3.1", "3.2", "3.3"]
-        # Linux added in M5 when rake update_binaries downloads binaries at CI time.
-        # Until then only the bundled aarch64-apple-darwin binary is present.
-        os: [macos-latest]
+        os: [macos-latest, ubuntu-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +25,9 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+
+      - name: Download native binaries
+        run: bundle exec rake update_binaries
 
       - name: Run RuboCop
         run: bundle exec rubocop
@@ -49,11 +50,16 @@ jobs:
           bundler-cache: true
 
       - name: Build gem
-        run: gem build c2pa.gemspec
+        # `rake build` runs update_binaries first via the enhanced task,
+        # so the packaged gem includes the native libraries.
+        run: bundle exec rake build
 
       - name: Verify gem contents
         run: |
-          gem_file=$(ls *.gem | head -1)
+          gem_file=$(ls pkg/*.gem | head -1)
           echo "Built: $gem_file"
           gem unpack "$gem_file" --target /tmp/gem-inspect
           find /tmp/gem-inspect -type f | sort
+          # Sanity-check that native libraries actually shipped
+          test -f /tmp/gem-inspect/*/libs/aarch64-apple-darwin/libc2pa_c.dylib
+          test -f /tmp/gem-inspect/*/libs/x86_64-unknown-linux-gnu/libc2pa_c.so

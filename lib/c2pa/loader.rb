@@ -41,8 +41,10 @@ module C2pa
         return path if File.exist?(path)
 
         raise C2pa::LibraryNotFoundError,
-              "Native library not found for platform '#{platform}' at '#{path}'. " \
-              'Set C2PA_LIBRARY_PATH to specify a custom path.'
+              "Native library not found for platform '#{platform}' at '#{path}'.\n" \
+              "If you cloned this repo for development, run:\n    " \
+              "bundle exec rake update_binaries\n" \
+              'Otherwise set C2PA_LIBRARY_PATH to specify a custom path.'
       end
 
       private

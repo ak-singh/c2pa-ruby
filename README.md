@@ -252,13 +252,26 @@ puts C2pa.version
 
 ## Contributing
 
-Contributions are welcome. To run the test suite locally:
+Contributions are welcome.
+
+### Development setup
 
 ```sh
-bundle install
-bundle exec rspec
-bundle exec rubocop
+git clone https://github.com/ak-singh/c2pa-ruby.git
+cd c2pa-ruby
+bin/setup            # bundle install + download native binaries
+bundle exec rspec    # run tests
+bundle exec rubocop  # run linter
 ```
+
+Native binaries are not committed to the repo. They are downloaded from
+[`contentauth/c2pa-rs` releases](https://github.com/contentauth/c2pa-rs/releases)
+into `libs/<platform>/` by `rake update_binaries`. This task runs
+automatically before `rake build`, so released gems always include the
+binaries.
+
+To target a different `c2pa-rs` version, edit `C2PA_VERSION` in the Rakefile
+and re-run `bundle exec rake update_binaries`.
 
 ## License
 

@@ -16,3 +16,7 @@ Gemfile.lock
 
 # Local notes — not for publication
 /docs/
+
+# Native binaries — downloaded by `rake update_binaries`, not committed.
+# `rake build` regenerates them before packaging the gem.
+/libs/*/libc2pa_c.*

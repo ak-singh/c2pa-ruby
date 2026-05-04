@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# One-command development setup for c2pa-ruby.
+# Installs gem dependencies and downloads the native libc2pa_c binaries.
+
+set -euo pipefail
+IFS=$'\n\t'
+
+cd "$(dirname "$0")/.."
+
+echo "==> Installing gem dependencies"
+bundle install
+
+echo
+echo "==> Downloading c2pa-c-ffi native binaries"
+bundle exec rake update_binaries
+
+echo
+echo "Setup complete. Run 'bundle exec rspec' to verify."
